@@ -1,0 +1,16 @@
+.{
+    .name = "zig-router",
+    .version = "1.0.0",
+    .paths = .{
+        "src",
+        "build.zig",
+        "build.zig.zon",
+        "LICENSE",
+    },
+    .dependencies = .{
+        .getty = .{
+            .url = "https://github.com/getty-zig/getty/archive/cb007b8ed148510de71ccc52143343b2e11413ff.tar.gz",
+            .hash = "1220300f52d7592914660ee3c8e461dc7c10bd45708eb32deb0e341b47c7921536dc",
+        },
+    },
+}
