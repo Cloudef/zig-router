@@ -2,47 +2,125 @@
   description = "zig-router flake";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
-    zig-stdenv.url = "github:Cloudef/nix-zig-stdenv";
+    zig2nix.url = "github:Cloudef/zig2nix";
   };
 
-  outputs = { flake-utils, nixpkgs, zig-stdenv, ... }:
+  outputs = { flake-utils, zig2nix, ... }:
   (flake-utils.lib.eachDefaultSystem (system:
     let
-      pkgs = nixpkgs.outputs.legacyPackages."${system}";
-      zig = zig-stdenv.versions.${system}.master;
-      app = script: {
-        type = "app";
-        program = toString (pkgs.writeShellApplication {
-          name = "app";
-          runtimeInputs = [ zig ];
-          text = ''
-            # shellcheck disable=SC2059
-            error() { printf -- "error: $1" "''${@:1}" 1>&2; exit 1; }
-            [[ -f ./flake.nix ]] || error 'Run this from the project root'
-            ${script}
-            '';
-        }) + "/bin/app";
+      zig-env = zig2nix.outputs.zig-env.${system};
+      env = zig-env {
+        zig = zig2nix.outputs.packages.${system}.zig.master.bin;
       };
-
-    in {
+    in with env.pkgs.lib; {
       # nix run
-      apps.default = app "zig build example";
+      apps.default = env.app [] "zig build example";
 
       # nix run .#test
-      apps.test = app "zig build test";
+      apps.test = env.app [] "zig build test";
 
       # nix run .#docs
-      apps.docs = app "zig build docs";
+      apps.docs = env.app [] "zig build docs";
 
       # nix run .#version
-      apps.version = app "zig version";
+      apps.version = env.app [] "zig version";
 
       # nix develop
-      devShells.default = pkgs.mkShell {
-        buildInputs = [ zig ];
-        shellHook = "export ZIG_BTRFS_WORKAROUND=1";
+      devShells.default = env.mkShell {};
+
+      # nix run .#readme
+      apps.readme = env.app [] (replaceStrings ["`"] ["\\`"] ''
+      cat <<EOF
+      # zig-router
+
+      Straightforward HTTP-like request routing.
+
+      ---
+
+      Project is tested against zig $(zig version)
+
+      ## Sample
+
+      ```zig
+      const router = @import("zig-router");
+
+      const MyJsonBody = struct {
+          float: f32,
+          text: []const u8,
+          number_with_default: u32 = 42,
       };
+
+      fn putJson(body: MyJsonBody) !Response {
+          log.info("float: {}", .{body.float});
+          log.info("text: {s}", .{body.text});
+          log.info("number_with_default: {}", .{body.number_with_default});
+          return .{ .body = "ok" };
+      }
+
+      const MyPathParams = struct {
+          id: []const u8,
+          bundle: u32,
+      };
+
+      fn getDynamic(params: MyPathParams) !Response {
+          log.info("id: {s}", .{params.id});
+          log.info("bundle: {}", .{params.bundle});
+          return .{};
+      }
+
+      const MyQuery = struct {
+          id: []const u8 = "plz give me a good paying stable job",
+          bundle: u32 = 42,
+      };
+
+      fn getQuery(query: MyQuery) !Response {
+          log.info("id: {s}", .{query.id});
+          log.info("bundle: {}", .{query.bundle});
+          return .{};
+      }
+
+      fn getError() !void {
+          return error.EPIC_FAIL;
+      }
+
+      fn onRequest(arena: *std.heap.ArenaAllocator, request: Request) !void {
+          router.Router(.{↴
+              router.Decoder(.json, router.JsonBodyDecoder(.{}, 4096).decode),↴
+          }, .{↴
+              router.Route(.PUT, "/json", putJson),↴
+              router.Route(.GET, "/dynamic/:id/paths/:bundle", getDynamic),↴
+              router.Route(.GET, "/query", getQuery),↴
+              router.Route(.GET, "/error", getError),↴
+          }).match(arena.allocator(), .{↴
+              .method = request.method,↴
+              .path = request.path↴,
+              .query = request.query,↴
+              .body = .{ .reader = request.body.reader() }↴
+          }, .{ arena.allocator() }) catch |err| switch (err) {↴
+              error.not_found => return .{ .status = .not_found },
+              error.bad_request => return .{ .status = .bad_request },
+              else => return err,↴
+          };↴
+      }
+      ```
+
+      ## Depend
+
+      `build.zig.zon`
+      ```zig
+      .zig_router = .{
+        .url = "https://github.com/Cloudef/zig-router/archive/{COMMIT}.tar.gz",
+        .hash = "{HASH}",
+      },
+      ```
+
+      `build.zig`
+      ```zig
+      const zig_router = b.dependency("zig_router", .{}).module("zig-router");
+      exe.root_module.addImport("zig-router", zig_router);
+      ```
+      EOF
+      '');
     }));
 }

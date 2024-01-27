@@ -31,7 +31,7 @@ inline fn Callable(comptime handler: anytype) CallableType(handler) {
 }
 
 fn serve(allocator: std.mem.Allocator, server_addr: []const u8, server_port: u16, context: anytype) !void {
-    var server = std.http.Server.init(allocator, .{ .reuse_address = true });
+    var server = std.http.Server.init(.{ .reuse_address = true });
     defer server.deinit();
 
     const address = std.net.Address.parseIp(server_addr, server_port) catch unreachable;

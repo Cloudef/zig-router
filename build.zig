@@ -9,8 +9,8 @@ pub fn build(b: *std.Build) void {
     const getty = b.dependency("getty", .{ .target = target, .optimize = optimize });
 
     const mod = b.addModule(package_name, .{
-        .source_file = .{ .path = package_path },
-        .dependencies = &.{
+        .root_source_file = .{ .path = package_path },
+        .imports = &.{
             .{ .name = "getty", .module = getty.module("getty") },
         },
     });
@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    exe_test.addModule("getty", getty.module("getty"));
+    exe_test.root_module.addImport("getty", getty.module("getty"));
     const run_test_exe = b.addRunArtifact(exe_test);
     const run_test = b.step("test", "Run unit tests");
     run_test.dependOn(&run_test_exe.step);
@@ -31,7 +31,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    exe_example.addModule("zig-router", mod);
+    exe_example.root_module.addImport("zig-router", mod);
     const run_example_exe = b.addRunArtifact(exe_example);
     const run_example = b.step("example", "Run example");
     run_example.dependOn(&run_example_exe.step);

@@ -4,7 +4,7 @@ Straightforward HTTP-like request routing.
 
 ---
 
-Project is tested against Zig v0.12.0-dev.1830+779b8e259
+Project is tested against zig 0.12.0-dev.2341+92211135f
 
 ## Sample
 
@@ -84,5 +84,5 @@ fn onRequest(arena: *std.heap.ArenaAllocator, request: Request) !Response {
 `build.zig`
 ```zig
 const zig_router = b.dependency("zig_router", .{}).module("zig-router");
-exe.addModule("zig-router", zig_router);
+exe.root_module.addImport("zig-router", zig_router);
 ```
