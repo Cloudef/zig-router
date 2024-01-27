@@ -5,10 +5,13 @@ const router = @import("zig-router");
 pub const log_level: std.log.Level = .debug;
 const log = std.log.scoped(.main);
 
+const Response = struct {
+    body: ?[]const u8 = null,
+};
+
 // curl "http://localhost:8000/" -X GET
-fn getIndex(response: *std.http.Server.Response) !void {
-    response.send() catch {};
-    response.writeAll("Hello from zig-router!") catch {};
+fn getIndex() !Response {
+    return .{ .body = "Hello from zig-router!" };
 }
 
 const MyJsonBody = struct {
@@ -18,11 +21,11 @@ const MyJsonBody = struct {
 };
 
 // curl "http://localhost:8000/json" -X PUT --data '{"float":32.0,"text":"lel"}'
-fn putJson(body: MyJsonBody, response: *std.http.Server.Response) !void {
+fn putJson(body: MyJsonBody) !Response {
     log.info("float: {}", .{body.float});
     log.info("text: {s}", .{body.text});
     log.info("number_with_default: {}", .{body.number_with_default});
-    response.send() catch {};
+    return .{};
 }
 
 const MyPathParams = struct {
@@ -31,10 +34,10 @@ const MyPathParams = struct {
 };
 
 // curl "http://localhost:8000/dynamic/he-man/paths/42" -X GET
-fn getDynamic(params: MyPathParams, response: *std.http.Server.Response) !void {
+fn getDynamic(params: MyPathParams) !Response {
     log.info("id: {s}", .{params.id});
     log.info("bundle: {}", .{params.bundle});
-    response.send() catch {};
+    return .{};
 }
 
 const MyQuery = struct {
@@ -43,22 +46,36 @@ const MyQuery = struct {
 };
 
 // curl "http://localhost:8000/query?id=denied" -X GET
-fn getQuery(query: MyQuery, response: *std.http.Server.Response) !void {
+fn getQuery(query: MyQuery) !Response {
     log.info("id: {s}", .{query.id});
     log.info("bundle: {}", .{query.bundle});
-    response.send() catch {};
+    return .{};
 }
 
 // curl "http://localhost:8000/error" -X GET
-fn getError() !void {
+fn getError() !Response {
     return error.EPIC_FAIL;
 }
 
 fn onRequest(arena: *std.heap.ArenaAllocator, response: *std.http.Server.Response) !void {
+    defer {
+        const builtin = @import("builtin");
+        if (builtin.mode == .Debug) {
+            if (arena.queryCapacity() >= 1000000.0) {
+                log.debug("memory used to process request: {d:.2} MB", .{@as(f64, @floatFromInt(arena.queryCapacity())) / 1000000.0});
+            } else {
+                log.debug("memory used to process request: {d:.2} KB", .{@as(f64, @floatFromInt(arena.queryCapacity())) / 1000.0});
+            }
+            _ = arena.reset(.free_all);
+        } else {
+            _ = arena.reset(.retain_capacity);
+        }
+    }
+
     var target_it = std.mem.splitSequence(u8, response.request.target, "?");
     const path = std.mem.trimRight(u8, target_it.first(), "/");
 
-    router.Router(.{
+    const res = router.Router(.{
         router.Decoder(.json, router.JsonBodyDecoder(.{}, 4096).decode),
     }, .{
         router.Route(.GET, "/", getIndex),
@@ -76,26 +93,20 @@ fn onRequest(arena: *std.heap.ArenaAllocator, response: *std.http.Server.Respons
             response.status = .not_found;
             response.send() catch {};
             response.writeAll("404 Not Found") catch {};
+            return;
         },
         error.bad_request => {
             response.status = .bad_request;
             response.send() catch {};
             response.writeAll("400 Bad Request") catch {};
+            return;
         },
         else => return err,
     };
 
-    const builtin = @import("builtin");
-    if (builtin.mode == .Debug) {
-        if (arena.queryCapacity() >= 1000000.0) {
-            log.debug("memory used to process request: {d:.2} MB", .{@as(f64, @floatFromInt(arena.queryCapacity())) / 1000000.0});
-        } else {
-            log.debug("memory used to process request: {d:.2} KB", .{@as(f64, @floatFromInt(arena.queryCapacity())) / 1000.0});
-        }
-        _ = arena.reset(.free_all);
-    } else {
-        _ = arena.reset(.retain_capacity);
-    }
+    response.status = .ok;
+    response.send() catch {};
+    if (res.body) |body| response.writeAll(body) catch {};
 }
 
 pub fn main() !void {
