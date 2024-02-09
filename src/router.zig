@@ -154,34 +154,40 @@ fn RouteType(comptime method: Method, comptime path: []const u8, comptime handle
             }
         }
 
-        fn call(_: @This(), allocator: std.mem.Allocator, decoder: anytype, request: anytype, bindings: anytype) return_type {
+        fn call(_: @This(), allocator: std.mem.Allocator, maybe_decoder: anytype, request: anytype, bindings: anytype) return_type {
             var args: std.meta.ArgsTuple(@TypeOf(handler)) = undefined;
             inline for (&args, handler_info.params[0..]) |*arg, param| {
                 arg.* = blk: {
                     inline for (bindings) |bind| if (@TypeOf(bind) == param.type.?) break :blk bind;
                     if (!has_dynamic_params) {
-                        @compileError(std.fmt.comptimePrint("{} is missing a binding for type: {}", .{@TypeOf(handler), param.type.?}));
+                        @compileError(std.fmt.comptimePrint("{} is missing a binding for type: {}", .{ @TypeOf(handler), param.type.? }));
                     } else {
-                        if (std.mem.endsWith(u8, @typeName(param.type.?), "Params")) {
+                        if (comptime std.mem.endsWith(u8, @typeName(param.type.?), "Params")) {
                             const de_path = @import("de/path.zig");
                             if (de_path.fromSlice(allocator, param.type.?, path, request.path)) |res| {
                                 break :blk res.value;
                             } else |err| {
-                                log.debug("{} parse failed with error: {}", .{param.type.?, err});
+                                log.debug("{} parse failed with error: {}", .{ param.type.?, err });
                             }
-                        } else if (std.mem.endsWith(u8, @typeName(param.type.?), "Query")) {
+                        } else if (comptime std.mem.endsWith(u8, @typeName(param.type.?), "Query")) {
                             const de_query = @import("de/query.zig");
                             if (de_query.fromSlice(allocator, param.type.?, request.query)) |res| {
                                 break :blk res.value;
                             } else |err| {
-                                log.debug("{} parse failed with error: {}", .{param.type.?, err});
+                                log.debug("{} parse failed with error: {}", .{ param.type.?, err });
                             }
-                        } else if (decoder != null and std.mem.endsWith(u8, @typeName(param.type.?), "Body")) {
-                            if (decoder.?.decode(allocator, param.type.?, request.body)) |res| {
-                                break :blk res;
-                            } else |err| {
-                                log.debug("{} parse failed with error: {}", .{param.type.?, err});
+                        } else if (comptime std.mem.endsWith(u8, @typeName(param.type.?), "Body")) {
+                            if (maybe_decoder) |decoder| {
+                                if (decoder.decode(allocator, param.type.?, request.body)) |res| {
+                                    break :blk res;
+                                } else |err| {
+                                    log.debug("{} parse failed with error: {}", .{ param.type.?, err });
+                                }
+                            } else {
+                                log.debug("{} parse failed with error: {s}", .{ param.type.?, "unsupported content-type" });
                             }
+                        } else {
+                            @compileError(std.fmt.comptimePrint("{} is missing a binding for type: {}", .{ @TypeOf(handler), param.type.? }));
                         }
                         return Error.bad_request;
                     }
