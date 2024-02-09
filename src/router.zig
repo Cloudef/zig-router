@@ -9,7 +9,7 @@ const std = @import("std");
 const log = std.log.scoped(.router);
 
 /// Routing error.
-pub const Error = error {
+pub const Error = error{
     /// Requested route was not found.
     not_found,
     /// Route was request with malformed content.
@@ -20,7 +20,7 @@ pub const Error = error {
 pub const Method = std.http.Method;
 
 /// Body of request.
-pub const Body = union (enum) {
+pub const Body = union(enum) {
     /// Body is stored within a `[]const u8` slice.
     data: []const u8,
     /// Body is backed by a `std.io.AnyReader`
@@ -125,7 +125,7 @@ fn RouteType(comptime method: Method, comptime path: []const u8, comptime handle
 
     _ = std.Uri.parseWithoutScheme(path) catch @compileError(std.fmt.comptimePrint("invalid route path: {s}", .{path}));
 
-    const return_type = switch(@typeInfo(handler_info.return_type.?)) {
+    const return_type = switch (@typeInfo(handler_info.return_type.?)) {
         .ErrorUnion => |eu| anyerror!eu.payload,
         else => anyerror!handler_info.return_type.?,
     };
@@ -232,7 +232,7 @@ pub fn Router(comptime decoders: anytype, comptime routes: anytype) type {
                     .fields = &content_type_fields,
                     .decls = &.{},
                     .is_exhaustive = true,
-                }
+                },
             });
         } else {
             break :blk void;
@@ -282,7 +282,7 @@ pub fn Router(comptime decoders: anytype, comptime routes: anytype) type {
             };
             inline for (routes) |route| {
                 if (route.matches(request)) {
-                    log.info("{} {s}?{s}", .{request.method, request.path, request.query});
+                    log.info("{} {s}?{s}", .{ request.method, request.path, request.query });
                     if (route.requires_allocator) {
                         var arena = std.heap.ArenaAllocator.init(allocator);
                         defer arena.deinit();
@@ -298,15 +298,19 @@ pub fn Router(comptime decoders: anytype, comptime routes: anytype) type {
 }
 
 test "Matching" {
-    const fun = struct { fn fun() void {}}.fun;
-    const router = Router(.{}, .{ Route(.GET, "/test/route", fun) });
+    const fun = struct {
+        fn fun() void {}
+    }.fun;
+    const router = Router(.{}, .{Route(.GET, "/test/route", fun)});
     try router.match(std.testing.allocator, .{ .method = .GET, .path = "/test/route" }, .{});
     try std.testing.expectError(Error.not_found, router.match(std.testing.allocator, .{ .method = .GET, .path = "/test" }, .{}));
 }
 
 test "Bindings" {
     // To bind custom types into a handler such as this
-    const MyThing = struct { answer_to_life: u32 };
+    const MyThing = struct {
+        answer_to_life: u32,
+    };
 
     const router = Router(.{}, .{
         Route(.GET, "/test/route", struct {
@@ -314,11 +318,11 @@ test "Bindings" {
             fn fun(thing: MyThing) !void {
                 try std.testing.expectEqual(thing.answer_to_life, 42);
             }
-        }.fun)
+        }.fun),
     });
 
     // 2. Bind value of it in the router.match call
-    const thing = MyThing { .answer_to_life = 42 };
+    const thing: MyThing = .{ .answer_to_life = 42 };
     try router.match(std.testing.allocator, .{ .method = .GET, .path = "/test/route" }, .{thing});
 
     // These are compile time checked, no way to test yet
@@ -335,7 +339,7 @@ test "Des body" {
     // This example showcases how you can use std.json as a decoder.
     const TestBody = struct {
         foo: []const u8,
-        bar: f32
+        bar: f32,
     };
 
     const router = Router(.{
@@ -346,7 +350,7 @@ test "Des body" {
                 try std.testing.expectEqualSlices(u8, body.foo, "perkele");
                 try std.testing.expectEqual(body.bar, 32.0);
             }
-        }.fun)
+        }.fun),
     });
 
     try router.match(std.testing.allocator, .{ .method = .GET, .path = "/test/route", .content_type = .json, .body = .{ .data = "{\"foo\":\"perkele\", \"bar\":32.0}" } }, .{});
@@ -358,7 +362,7 @@ test "Des query" {
     // If you suffix your type with Query then the Router will try to deserialize it from the request query.
     const TestQuery = struct {
         foo: []const u8,
-        bar: f32
+        bar: f32,
     };
 
     const router = Router(.{}, .{
@@ -367,7 +371,7 @@ test "Des query" {
                 try std.testing.expectEqualSlices(u8, query.foo, "perkele");
                 try std.testing.expectEqual(query.bar, 32.0);
             }
-        }.fun)
+        }.fun),
     });
 
     try router.match(std.testing.allocator, .{ .method = .GET, .path = "/test/route", .query = "foo=perkele&bar=32.0" }, .{});
@@ -379,7 +383,7 @@ test "Des path" {
     // If you suffix your type with Params then the Router will try to deserialize it from the request path.
     const TestParams = struct {
         foo: []const u8,
-        bar: f32
+        bar: f32,
     };
 
     const router = Router(.{}, .{
@@ -388,7 +392,7 @@ test "Des path" {
                 try std.testing.expectEqualSlices(u8, params.foo, "perkele");
                 try std.testing.expectEqual(params.bar, 32.0);
             }
-        }.fun)
+        }.fun),
     });
 
     try router.match(std.testing.allocator, .{ .method = .GET, .path = "/test/perkele/route/32.0" }, .{});
