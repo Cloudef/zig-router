@@ -50,14 +50,14 @@ fn getError() !void {
     return error.EPIC_FAIL;
 }
 
-fn onRequest(arena: *std.heap.ArenaAllocator, request: Request) !Response {
-    return router.Router(.{↴
+fn onRequest(arena: *std.heap.ArenaAllocator, request: Request) !void {
+    router.Router(.{↴
         router.Decoder(.json, router.JsonBodyDecoder(.{}, 4096).decode),↴
     }, .{↴
-        router.Route(.PUT, "/json", putJson),↴
-        router.Route(.GET, "/dynamic/:id/paths/:bundle", getDynamic),↴
-        router.Route(.GET, "/query", getQuery),↴
-        router.Route(.GET, "/error", getError),↴
+        router.Route(.PUT, "/json", putJson, .{}),↴
+        router.Route(.GET, "/dynamic/:id/paths/:bundle", getDynamic, .{}),↴
+        router.Route(.GET, "/query", getQuery, .{}),↴
+        router.Route(.GET, "/error", getError, .{}),↴
     }).match(arena.allocator(), .{↴
         .method = request.method,↴
         .path = request.path↴,
