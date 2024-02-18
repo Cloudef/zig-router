@@ -270,8 +270,6 @@ pub fn Router(comptime decoders: anytype, comptime routes: anytype) type {
         /// Request query params.
         /// Query params start without the question mark (?) character.
         query: []const u8 = "",
-        /// Body of the request.
-        body: Body = .{ .data = "" },
     };
 
     return struct {
