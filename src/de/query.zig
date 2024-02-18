@@ -1,10 +1,7 @@
 const std = @import("std");
 const getty = @import("getty");
 
-pub const Error = error {
-    SyntaxError,
-    UnexpectedEndOfInput
-};
+pub const Error = error{ SyntaxError, UnexpectedEndOfInput };
 
 const Allocator = std.mem.Allocator;
 
@@ -40,7 +37,7 @@ fn StructAccess(comptime D: type) type {
 
 /// Query deserializer
 pub fn Deserializer(comptime dbt: anytype) type {
-     return struct {
+    return struct {
         tokens: std.mem.SplitIterator(u8, .any),
 
         const Self = @This();
