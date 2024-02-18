@@ -79,16 +79,16 @@ pub fn Deserializer(comptime dbt: anytype) type {
             return self;
         }
 
-        fn deserializeIgnored(self: *Self, ally: Allocator, visitor: anytype) Err!@TypeOf(visitor).Value {
-            _ = self.tokens.next() orelse return error.UnexpectedEndOfInput;
+        fn deserializeIgnored(_: *Self, ally: Allocator, visitor: anytype) Err!@TypeOf(visitor).Value {
             return try visitor.visitVoid(ally, De);
         }
 
         fn deserializeOptional(self: *Self, ally: Allocator, visitor: anytype) Err!@TypeOf(visitor).Value {
-            const token = self.tokens.peek() orelse return error.UnexpectedEndOfInput;
-            if (std.mem.eql(u8, token, "null")) {
-                _ = self.tokens.next();
-                return try visitor.visitNull(ally, De);
+            if (self.tokens.peek()) |token| {
+                if (std.mem.eql(u8, token, "null")) {
+                    _ = self.tokens.next();
+                    return try visitor.visitNull(ally, De);
+                }
             }
             return try visitor.visitSome(ally, self.deserializer());
         }
@@ -105,9 +105,7 @@ pub fn Deserializer(comptime dbt: anytype) type {
 
         fn deserializeBool(self: *Self, ally: Allocator, visitor: anytype) Err!@TypeOf(visitor).Value {
             const token = self.tokens.next() orelse return error.UnexpectedEndOfInput;
-            if (std.mem.eql(u8, token, "true")) return try visitor.visitBool(ally, De, true)
-            else if (std.mem.eql(u8, token, "false")) return try visitor.visitBool(ally, De, false)
-            else return error.InvalidType;
+            if (std.mem.eql(u8, token, "true")) return try visitor.visitBool(ally, De, true) else if (std.mem.eql(u8, token, "false")) return try visitor.visitBool(ally, De, false) else return error.InvalidType;
         }
 
         fn deserializeFloat(self: *Self, ally: Allocator, visitor: anytype) Err!@TypeOf(visitor).Value {
@@ -151,7 +149,7 @@ pub fn fromDeserializer(ally: std.mem.Allocator, comptime T: type, d: anytype) !
 }
 
 test "des" {
-    const ser = "foo=bar&bar=foo&boolean=false&int=4&float=2&code=not_found&unset=null&set=true";
+    const ser = "foo=bar&bar=foo&boolean=false&int=4&float=2&code=not_found&unset=null&set=true&singleton";
 
     const Schema = struct {
         foo: []const u8,
@@ -162,6 +160,7 @@ test "des" {
         code: std.http.Status,
         unset: ?bool,
         set: ?bool,
+        singleton: ?void,
     };
 
     const v = try fromSlice(std.testing.allocator, Schema, ser);
@@ -175,4 +174,5 @@ test "des" {
     try std.testing.expectEqual(v.value.code, std.http.Status.not_found);
     try std.testing.expectEqual(v.value.unset, null);
     try std.testing.expectEqual(v.value.set, true);
+    try std.testing.expectEqual(v.value.singleton, {});
 }
