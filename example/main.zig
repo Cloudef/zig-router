@@ -14,6 +14,16 @@ fn getIndex() !Response {
     return .{ .body = "Hello from zig-router!" };
 }
 
+const MyObjectPathParams = struct {
+    key: []const u8,
+};
+
+// curl "http://localhost:8000/object/..." -X PUT
+fn putObject(params: MyObjectPathParams) !Response {
+    log.info("key: {s}", .{params.key});
+    return .{};
+}
+
 const MyJsonBody = struct {
     float: f32,
     text: []const u8,
@@ -78,16 +88,17 @@ fn onRequest(arena: *std.heap.ArenaAllocator, response: *std.http.Server.Respons
     const res = router.Router(.{
         router.Decoder(.json, router.JsonBodyDecoder(.{}, 4096).decode),
     }, .{
-        router.Route(.GET, "/", getIndex),
-        router.Route(.PUT, "/json", putJson),
-        router.Route(.GET, "/dynamic/:id/paths/:bundle", getDynamic),
-        router.Route(.GET, "/query", getQuery),
-        router.Route(.GET, "/error", getError),
+        router.Route(.GET, "/", getIndex, .{}),
+        router.Route(.PUT, "/object/:key", putObject, .{ .strict = false }),
+        router.Route(.PUT, "/json", putJson, .{}),
+        router.Route(.GET, "/dynamic/:id/paths/:bundle", getDynamic, .{}),
+        router.Route(.GET, "/query", getQuery, .{}),
+        router.Route(.GET, "/error", getError, .{}),
     }).match(arena.allocator(), .{
         .method = response.request.method,
         .path = if (path.len > 0) path else "/",
         .query = target_it.rest(),
-        .body = .{ .reader = response.reader().any() }
+        .body = .{ .reader = response.reader().any() },
     }, .{ arena.allocator(), response }) catch |err| switch (err) {
         error.not_found => {
             response.status = .not_found;
@@ -114,5 +125,5 @@ pub fn main() !void {
     defer std.debug.assert(gpa.deinit() == .ok);
     var arena = std.heap.ArenaAllocator.init(gpa.allocator());
     defer arena.deinit();
-    try server.run(gpa.allocator(), "127.0.0.1", 8000, onRequest, .{ &arena });
+    try server.run(gpa.allocator(), "127.0.0.1", 8000, onRequest, .{&arena});
 }

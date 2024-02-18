@@ -1,10 +1,7 @@
 const std = @import("std");
 const getty = @import("getty");
 
-pub const Error = error {
-    SyntaxError,
-    UnexpectedEndOfInput
-};
+pub const Error = error{ SyntaxError, UnexpectedEndOfInput };
 
 const Allocator = std.mem.Allocator;
 
@@ -43,7 +40,7 @@ fn StructAccess(comptime D: type) type {
 
 /// Query deserializer
 pub fn Deserializer(comptime dbt: anytype) type {
-     return struct {
+    return struct {
         schema: std.mem.TokenIterator(u8, .sequence),
         path: std.mem.TokenIterator(u8, .sequence),
         value: []const u8 = "",
@@ -58,8 +55,13 @@ pub fn Deserializer(comptime dbt: anytype) type {
 
         pub fn next(self: *Self) Error!?[]const u8 {
             if (self.schema.peek() == null) return null;
-            self.value = self.path.next() orelse return error.UnexpectedEndOfInput;
-            return self.schema.next();
+            const nxt = self.schema.next();
+            if (self.schema.peek() == null) {
+                self.value = self.path.rest();
+            } else {
+                self.value = self.path.next() orelse return error.UnexpectedEndOfInput;
+            }
+            return nxt;
         }
 
         pub usingnamespace getty.Deserializer(
@@ -113,9 +115,7 @@ pub fn Deserializer(comptime dbt: anytype) type {
         }
 
         fn deserializeBool(self: *Self, ally: Allocator, visitor: anytype) Err!@TypeOf(visitor).Value {
-            if (std.mem.eql(u8, self.value, "true")) return try visitor.visitBool(ally, De, true)
-            else if (std.mem.eql(u8, self.value, "false")) return try visitor.visitBool(ally, De, false)
-            else return error.InvalidType;
+            if (std.mem.eql(u8, self.value, "true")) return try visitor.visitBool(ally, De, true) else if (std.mem.eql(u8, self.value, "false")) return try visitor.visitBool(ally, De, false) else return error.InvalidType;
         }
 
         fn deserializeFloat(self: *Self, ally: Allocator, visitor: anytype) Err!@TypeOf(visitor).Value {

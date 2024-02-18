@@ -8,6 +8,14 @@
 const std = @import("std");
 const log = std.log.scoped(.router);
 
+/// Additional options for route.
+pub const RouteOptions = struct {
+    /// When using path parameters the request path must match exactly to the schema
+    /// If this is set to false, the request path can have additional components,
+    /// In this case the last path parameter will contain rest of the request path.
+    strict: bool = true,
+};
+
 /// Routing error.
 pub const Error = error{
     /// Requested route was not found.
@@ -94,7 +102,7 @@ pub inline fn Decoder(comptime content_type: anytype, comptime decoder: anytype)
     return .{};
 }
 
-fn RouteType(comptime method: Method, comptime path: []const u8, comptime handler: anytype) type {
+fn RouteType(comptime method: Method, comptime path: []const u8, comptime handler: anytype, comptime opts: RouteOptions) type {
     const handler_info = switch (@typeInfo(@TypeOf(handler))) {
         .Fn => |info| info,
         else => @compileError(std.fmt.comptimePrint("{s} handler is not a function", .{path})),
@@ -136,14 +144,22 @@ fn RouteType(comptime method: Method, comptime path: []const u8, comptime handle
 
         fn matches(_: @This(), request: anytype) bool {
             if (method != request.method) return false;
-            if (has_path_params) {
-                if (num_path_components != std.mem.count(u8, request.path, "/")) return false;
+            if (comptime has_path_params) {
+                if (comptime opts.strict) {
+                    if (num_path_components != std.mem.count(u8, request.path, "/")) return false;
+                } else {
+                    if (num_path_components > std.mem.count(u8, request.path, "/")) return false;
+                }
                 var ref_tokens = std.mem.tokenizeSequence(u8, path, "/");
                 var req_tokens = std.mem.tokenizeSequence(u8, request.path, "/");
                 while (true) {
                     const ref_t = ref_tokens.next();
                     const req_t = req_tokens.next();
-                    if (ref_t == null and req_t == null) break;
+                    if (comptime opts.strict) {
+                        if (ref_t == null and req_t == null) break;
+                    } else {
+                        if (ref_t == null) break;
+                    }
                     if (ref_t == null or req_t == null) return false;
                     if (ref_t.?[0] == ':') continue; // ignore path param
                     if (!std.mem.eql(u8, ref_t.?, req_t.?)) return false;
@@ -159,7 +175,7 @@ fn RouteType(comptime method: Method, comptime path: []const u8, comptime handle
             inline for (&args, handler_info.params[0..]) |*arg, param| {
                 arg.* = blk: {
                     inline for (bindings) |bind| if (@TypeOf(bind) == param.type.?) break :blk bind;
-                    if (!has_dynamic_params) {
+                    if (comptime !has_dynamic_params) {
                         @compileError(std.fmt.comptimePrint("{} is missing a binding for type: {}", .{ @TypeOf(handler), param.type.? }));
                     } else {
                         if (comptime std.mem.endsWith(u8, @typeName(param.type.?), "Params")) {
@@ -206,7 +222,7 @@ fn RouteType(comptime method: Method, comptime path: []const u8, comptime handle
 /// `const MyRouteParams = struct { id: u32 };`
 /// The deserialization is done using `getty` framework, thus the deserialization can be controlled
 /// with struct attributes.
-pub inline fn Route(comptime method: Method, comptime path: []const u8, comptime handler: anytype) RouteType(method, path, handler) {
+pub inline fn Route(comptime method: Method, comptime path: []const u8, comptime handler: anytype, comptime opts: RouteOptions) RouteType(method, path, handler, opts) {
     return .{};
 }
 
@@ -305,7 +321,7 @@ test "Matching" {
     const fun = struct {
         fn fun() void {}
     }.fun;
-    const router = Router(.{}, .{Route(.GET, "/test/route", fun)});
+    const router = Router(.{}, .{Route(.GET, "/test/route", fun, .{})});
     try router.match(std.testing.allocator, .{ .method = .GET, .path = "/test/route" }, .{});
     try std.testing.expectError(Error.not_found, router.match(std.testing.allocator, .{ .method = .GET, .path = "/test" }, .{}));
 }
@@ -322,7 +338,7 @@ test "Bindings" {
             fn fun(thing: MyThing) !void {
                 try std.testing.expectEqual(thing.answer_to_life, 42);
             }
-        }.fun),
+        }.fun, .{}),
     });
 
     // 2. Bind value of it in the router.match call
@@ -354,7 +370,7 @@ test "Des body" {
                 try std.testing.expectEqualSlices(u8, body.foo, "perkele");
                 try std.testing.expectEqual(body.bar, 32.0);
             }
-        }.fun),
+        }.fun, .{}),
     });
 
     try router.match(std.testing.allocator, .{ .method = .GET, .path = "/test/route", .content_type = .json, .body = .{ .data = "{\"foo\":\"perkele\", \"bar\":32.0}" } }, .{});
@@ -375,7 +391,7 @@ test "Des query" {
                 try std.testing.expectEqualSlices(u8, query.foo, "perkele");
                 try std.testing.expectEqual(query.bar, 32.0);
             }
-        }.fun),
+        }.fun, .{}),
     });
 
     try router.match(std.testing.allocator, .{ .method = .GET, .path = "/test/route", .query = "foo=perkele&bar=32.0" }, .{});
@@ -396,10 +412,17 @@ test "Des path" {
                 try std.testing.expectEqualSlices(u8, params.foo, "perkele");
                 try std.testing.expectEqual(params.bar, 32.0);
             }
-        }.fun),
+        }.fun, .{}),
+        Route(.GET, "/nonstrict/:bar/:foo", struct {
+            fn fun(params: TestParams) !void {
+                try std.testing.expectEqual(params.bar, 32.0);
+                try std.testing.expectEqualSlices(u8, params.foo, "oispa/kaljaa");
+            }
+        }.fun, .{ .strict = false }),
     });
 
     try router.match(std.testing.allocator, .{ .method = .GET, .path = "/test/perkele/route/32.0" }, .{});
+    try router.match(std.testing.allocator, .{ .method = .GET, .path = "/nonstrict/32.0/oispa/kaljaa" }, .{});
     try std.testing.expectError(error.bad_request, router.match(std.testing.allocator, .{ .method = .GET, .path = "/test/perkele/route/not-bool" }, .{}));
     try std.testing.expectError(error.not_found, router.match(std.testing.allocator, .{ .method = .GET, .path = "/test/perkele/route" }, .{}));
 }
