@@ -228,7 +228,7 @@ pub inline fn Route(comptime method: Method, comptime path: []const u8, comptime
 
 /// Constructs an router.
 /// `decoders` is a slice of `Decoder(...)` pairings.
-/// `routes` is a slice of `Rotue(...)` definitions.
+/// `routes` is a slice of `Route(...)` definitions.
 pub fn Router(comptime decoders: anytype, comptime routes: anytype) type {
     comptime var content_type_fields: [decoders.len]std.builtin.Type.EnumField = undefined;
     for (decoders, &content_type_fields, 0..) |decoder, *content_type, i| {
