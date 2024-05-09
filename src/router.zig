@@ -131,7 +131,7 @@ fn RouteType(comptime method: Method, comptime path: []const u8, comptime handle
         @compileError(std.fmt.comptimePrint("{s} empty path components are not allowed", .{path}));
     }
 
-    _ = std.Uri.parseWithoutScheme(path) catch @compileError(std.fmt.comptimePrint("invalid route path: {s}", .{path}));
+    _ = std.Uri.parseAfterScheme("", path) catch @compileError(std.fmt.comptimePrint("invalid route path: {s}", .{path}));
 
     const return_type = switch (@typeInfo(handler_info.return_type.?)) {
         .ErrorUnion => |eu| anyerror!eu.payload,

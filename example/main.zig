@@ -67,7 +67,7 @@ fn getError() !Response {
     return error.EPIC_FAIL;
 }
 
-fn onRequest(arena: *std.heap.ArenaAllocator, response: *std.http.Server.Response) !void {
+fn onRequest(arena: *std.heap.ArenaAllocator, request: *std.http.Server.Request) !void {
     defer {
         const builtin = @import("builtin");
         if (builtin.mode == .Debug) {
@@ -82,7 +82,7 @@ fn onRequest(arena: *std.heap.ArenaAllocator, response: *std.http.Server.Respons
         }
     }
 
-    var target_it = std.mem.splitSequence(u8, response.request.target, "?");
+    var target_it = std.mem.splitSequence(u8, request.head.target, "?");
     const path = std.mem.trimRight(u8, target_it.first(), "/");
 
     const res = router.Router(.{
@@ -95,29 +95,35 @@ fn onRequest(arena: *std.heap.ArenaAllocator, response: *std.http.Server.Respons
         router.Route(.GET, "/query", getQuery, .{}),
         router.Route(.GET, "/error", getError, .{}),
     }).match(arena.allocator(), .{
-        .method = response.request.method,
+        .method = request.head.method,
         .path = if (path.len > 0) path else "/",
         .query = target_it.rest(),
-        .body = .{ .reader = response.reader().any() },
-    }, .{ arena.allocator(), response }) catch |err| switch (err) {
+        .body = .{ .reader = try request.reader() },
+    }, .{ arena.allocator() }) catch |err| switch (err) {
         error.not_found => {
-            response.status = .not_found;
-            response.send() catch {};
-            response.writeAll("404 Not Found") catch {};
+            request.respond("404 Not Found", .{
+                .status = .not_found,
+                .transfer_encoding = .none,
+                .keep_alive = false,
+            }) catch {};
             return;
         },
         error.bad_request => {
-            response.status = .bad_request;
-            response.send() catch {};
-            response.writeAll("400 Bad Request") catch {};
+            request.respond("404 Bad Request", .{
+                .status = .bad_request,
+                .transfer_encoding = .none,
+                .keep_alive = false,
+            }) catch {};
             return;
         },
         else => return err,
     };
 
-    response.status = .ok;
-    response.send() catch {};
-    if (res.body) |body| response.writeAll(body) catch {};
+    try request.respond(res.body orelse "", .{
+        .status = .ok,
+        .transfer_encoding = .chunked,
+        .keep_alive = false,
+    });
 }
 
 pub fn main() !void {
@@ -125,5 +131,5 @@ pub fn main() !void {
     defer std.debug.assert(gpa.deinit() == .ok);
     var arena = std.heap.ArenaAllocator.init(gpa.allocator());
     defer arena.deinit();
-    try server.run(gpa.allocator(), "127.0.0.1", 8000, onRequest, .{&arena});
+    try server.run("127.0.0.1", 8000, onRequest, .{&arena});
 }

@@ -30,49 +30,44 @@ inline fn Callable(comptime handler: anytype) CallableType(handler) {
     return .{};
 }
 
-fn serve(allocator: std.mem.Allocator, server_addr: []const u8, server_port: u16, context: anytype) !void {
-    var server = std.http.Server.init(.{ .reuse_address = true });
-    defer server.deinit();
-
-    const address = std.net.Address.parseIp(server_addr, server_port) catch unreachable;
-    try server.listen(address);
+fn serve(server_addr: []const u8, server_port: u16, context: anytype) !void {
+    const address = try std.net.Address.parseIp(server_addr, server_port);
+    var tcp_server = try address.listen(.{
+        .reuse_address = true,
+        .reuse_port = true,
+    });
+    defer tcp_server.deinit();
 
     log.info("Server is running at {s}:{d}", .{ server_addr, server_port });
 
-    outer: while (true) {
-        var response = try server.accept(.{ .allocator = allocator });
-        defer response.deinit();
+    accept: while (true) {
+        var conn = tcp_server.accept() catch continue;
+        defer conn.stream.close();
 
-        while (response.reset() != .closing) {
-            response.wait() catch |err| switch (err) {
-                error.HttpHeadersInvalid => continue :outer,
-                error.EndOfStream => continue,
-                else => return err,
+        var buf: [8192]u8 = undefined;
+        var server = std.http.Server.init(conn, &buf);
+        while (server.state == .ready) {
+            var request = server.receiveHead() catch continue :accept;
+
+            log.info("{s} {s} {s}", .{ @tagName(request.head.method), @tagName(request.head.version), request.head.target });
+
+            context.onRequest.call(.{ &request }, context.userBindings) catch |err| {
+                request.respond(@errorName(err), .{
+                    .status = .internal_server_error,
+                    .transfer_encoding = .none,
+                    .keep_alive = false,
+                }) catch {};
             };
 
-            log.info("{s} {s} {s}", .{ @tagName(response.request.method), @tagName(response.request.version), response.request.target });
-
-            response.status = .ok;
-            response.transfer_encoding = .chunked;
-            try response.headers.append("connection", "close");
-
-            context.onRequest.call(.{ &response }, context.userBindings) catch |err| {
-                response.status = .internal_server_error;
-                response.transfer_encoding = .chunked;
-                try response.headers.append("connection", "close");
-                try response.send();
-                response.writeAll(@errorName(err)) catch {};
-            };
-
-            try response.finish();
+            continue :accept;
         }
     }
 }
 
-pub fn run(allocator: std.mem.Allocator, address: []const u8, port: u16, comptime onRequest: anytype, bindings: anytype) !void {
+pub fn run(address: []const u8, port: u16, comptime onRequest: anytype, bindings: anytype) !void {
     const Context = struct {
         comptime onRequest: CallableType(onRequest) = Callable(onRequest),
         userBindings: @TypeOf(bindings),
     };
-    try serve(allocator, address, port, Context { .userBindings = bindings });
+    try serve(address, port, Context { .userBindings = bindings });
 }
