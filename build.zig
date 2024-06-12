@@ -9,14 +9,14 @@ pub fn build(b: *std.Build) void {
     const getty = b.dependency("getty", .{ .target = target, .optimize = optimize });
 
     const mod = b.addModule(package_name, .{
-        .root_source_file = .{ .path = package_path },
+        .root_source_file = b.path(package_path),
         .imports = &.{
             .{ .name = "getty", .module = getty.module("getty") },
         },
     });
 
     const exe_test = b.addTest(.{
-        .root_source_file = .{ .path = package_path },
+        .root_source_file = b.path(package_path),
         .target = target,
         .optimize = optimize,
     });
@@ -27,7 +27,7 @@ pub fn build(b: *std.Build) void {
 
     const exe_example = b.addExecutable(.{
         .name = "example",
-        .root_source_file = .{ .path = "example/main.zig" },
+        .root_source_file = b.path("example/main.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -40,7 +40,7 @@ pub fn build(b: *std.Build) void {
 
     const doc_obj = b.addObject(.{
         .name = "docs",
-        .root_source_file = .{ .path = package_path },
+        .root_source_file = b.path(package_path),
         .target = target,
         .optimize = optimize,
     });
