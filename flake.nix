@@ -107,18 +107,23 @@
 
       ## Depend
 
-      `build.zig.zon`
-      ```zig
-      .zig_router = .{
-        .url = "https://github.com/Cloudef/zig-router/archive/{COMMIT}.tar.gz",
-        .hash = "{HASH}",
-      },
+      Run the following command in zig project root directory.
+
+      ```sh
+      zig fetch --save git+https://github.com/Cloudef/zig-router.git
       ```
 
-      `build.zig`
+      In `build.zig` file add the following for whichever modules `zig-router` is required.
+
       ```zig
-      const zig_router = b.dependency("zig_router", .{}).module("zig-router");
-      exe.root_module.addImport("zig-router", zig_router);
+      const zig_router = b.dependency("zig-router", .{});
+      exe.root_module.addImport("zig-router", zig_router.module("zig-router"));
+      ```
+
+      You can now import the `zig-router` from zig code.
+
+      ```zig
+      const router = @import("zig-router");
       ```
       EOF
       '');
