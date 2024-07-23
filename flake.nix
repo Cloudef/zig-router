@@ -110,7 +110,7 @@
       Run the following command in zig project root directory.
 
       ```sh
-      zig fetch --save git+https://github.com/Cloudef/zig-router.git
+      zig fetch --save git+https://github.com/Cloudef/zig-router.git#zig-stable
       ```
 
       In `build.zig` file add the following for whichever modules `zig-router` is required.
