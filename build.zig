@@ -10,10 +10,10 @@ pub fn build(b: *std.Build) void {
 
     const mod = b.addModule(package_name, .{
         .root_source_file = b.path(package_path),
-        .imports = &.{
-            .{ .name = "getty", .module = getty.module("getty") },
-        },
+        .target = target,
+        .optimize = optimize,
     });
+    mod.addImport("getty", getty.module("getty"));
 
     const exe_test = b.addTest(.{
         .root_source_file = b.path(package_path),

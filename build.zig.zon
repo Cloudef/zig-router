@@ -9,7 +9,7 @@
     },
     .dependencies = .{
         .getty = .{
-            .url = "https://github.com/getty-zig/getty/archive/78738b665a53db4be85696635b9c832fbca8d273.tar.gz",
+            .url = "git+https://github.com/getty-zig/getty.git#a78731bfc9a577ff57ca9bba05959a99a0898b64",
             .hash = "12204235c113ed912d951e381066d587bb398b7175dc635c50c17864946bbd570879",
         },
     },
