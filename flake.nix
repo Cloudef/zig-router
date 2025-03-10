@@ -11,7 +11,7 @@
     let
       zig-env = zig2nix.outputs.zig-env.${system};
       env = zig-env {
-        zig = zig2nix.outputs.packages.${system}.zig."0.13.0".bin;
+        zig = zig2nix.outputs.packages.${system}.zig-0_13_0;
       };
     in with env.pkgs.lib; {
       # nix run
